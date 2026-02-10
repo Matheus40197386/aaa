@@ -1,0 +1,69 @@
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from app import models
+from app.dependencies import get_db, get_current_user
+import pandas as pd
+import os
+
+router = APIRouter(prefix="/spreadsheets", tags=["spreadsheets"])
+
+@router.get("")
+def list_spreadsheets(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    if user.is_admin:
+        items = db.query(models.Spreadsheet).all()
+    else:
+        items = (
+            db.query(models.Spreadsheet)
+            .join(models.spreadsheet_access)
+            .join(models.AccessLevel)
+            .join(models.user_access_levels)
+            .filter(models.user_access_levels.c.user_id == user.id)
+            .distinct()
+            .all()
+        )
+    return [{"id": s.id, "title": s.title} for s in items]
+
+@router.get("/{spreadsheet_id}/data")
+def get_spreadsheet_data(
+    spreadsheet_id: int,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    search: str | None = None,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    s = db.query(models.Spreadsheet).filter(models.Spreadsheet.id == spreadsheet_id).first()
+    if not s:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    if not user.is_admin:
+        allowed = (
+            db.query(models.Spreadsheet)
+            .join(models.spreadsheet_access)
+            .join(models.AccessLevel)
+            .join(models.user_access_levels)
+            .filter(models.Spreadsheet.id == spreadsheet_id)
+            .filter(models.user_access_levels.c.user_id == user.id)
+            .first()
+        )
+        if not allowed:
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+    if not os.path.exists(s.file_path):
+        raise HTTPException(status_code=404, detail="File missing")
+
+    ext = os.path.splitext(s.file_path)[1].lower()
+    if ext == ".csv":
+        df = pd.read_csv(s.file_path)
+    else:
+        df = pd.read_excel(s.file_path)
+
+    if search:
+        mask = df.astype(str).apply(lambda row: row.str.contains(search, case=False, na=False)).any(axis=1)
+        df = df[mask]
+
+    df = df.iloc[offset:offset + limit]
+    return {
+        "columns": list(df.columns),
+        "rows": df.to_dict(orient="records"),
+    }
