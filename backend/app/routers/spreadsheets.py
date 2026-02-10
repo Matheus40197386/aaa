@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app import models
 from app.dependencies import get_db, get_current_user
 import pandas as pd
+import numpy as np
 import os
 
 router = APIRouter(prefix="/spreadsheets", tags=["spreadsheets"])
@@ -68,6 +69,9 @@ def get_spreadsheet_data(
         df = df[mask]
 
     df = df.iloc[offset:offset + limit]
+    # sanitize to JSON-safe values
+    df = df.replace([np.inf, -np.inf], None)
+    df = df.where(pd.notnull(df), None)
     return {
         "columns": list(df.columns),
         "rows": df.to_dict(orient="records"),

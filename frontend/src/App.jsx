@@ -96,12 +96,22 @@ export default function App() {
   async function loadData(id, reset = false) {
     const nextOffset = reset ? 0 : offset;
     setSelectedId(id);
-    const res = await axios.get(
-      `${API_URL}/spreadsheets/${id}/data?limit=${limit}&offset=${nextOffset}&search=${encodeURIComponent(search)}&col=${encodeURIComponent(searchCol)}`,
-      authHeaders(token)
-    );
-    setTable(res.data);
-    if (reset) setOffset(0);
+    const params = {
+      limit,
+      offset: nextOffset,
+    };
+    if (search) params.search = search;
+    if (searchCol) params.col = searchCol;
+    try {
+      const res = await axios.get(`${API_URL}/spreadsheets/${id}/data`, {
+        ...authHeaders(token),
+        params,
+      });
+      setTable(res.data);
+      if (reset) setOffset(0);
+    } catch (err) {
+      setMessage("Erro ao carregar dados da planilha.");
+    }
   }
 
   function nextPage() {
