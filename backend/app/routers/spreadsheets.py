@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from app import models
 from app.dependencies import get_db, get_current_user
@@ -29,6 +30,7 @@ def get_spreadsheet_data(
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     search: str | None = None,
+    col: str | None = None,
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
@@ -59,7 +61,10 @@ def get_spreadsheet_data(
         df = pd.read_excel(s.file_path)
 
     if search:
-        mask = df.astype(str).apply(lambda row: row.str.contains(search, case=False, na=False)).any(axis=1)
+        if col and col in df.columns:
+            mask = df[col].astype(str).str.contains(search, case=False, na=False)
+        else:
+            mask = df.astype(str).apply(lambda row: row.str.contains(search, case=False, na=False)).any(axis=1)
         df = df[mask]
 
     df = df.iloc[offset:offset + limit]
@@ -67,3 +72,44 @@ def get_spreadsheet_data(
         "columns": list(df.columns),
         "rows": df.to_dict(orient="records"),
     }
+
+@router.get("/{spreadsheet_id}/download")
+def download_spreadsheet(
+    spreadsheet_id: int,
+    format: str = Query("excel", pattern="^(excel|csv)$"),
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    s = db.query(models.Spreadsheet).filter(models.Spreadsheet.id == spreadsheet_id).first()
+    if not s:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    if not user.is_admin:
+        allowed = (
+            db.query(models.Spreadsheet)
+            .join(models.spreadsheet_access)
+            .join(models.AccessLevel)
+            .join(models.user_access_levels)
+            .filter(models.Spreadsheet.id == spreadsheet_id)
+            .filter(models.user_access_levels.c.user_id == user.id)
+            .first()
+        )
+        if not allowed:
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+    if not os.path.exists(s.file_path):
+        raise HTTPException(status_code=404, detail="File missing")
+
+    if format == "excel":
+        filename = f"{s.title}.xlsx"
+        return FileResponse(s.file_path, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=filename)
+
+    # CSV generation on the fly
+    ext = os.path.splitext(s.file_path)[1].lower()
+    if ext == ".csv":
+        return FileResponse(s.file_path, media_type="text/csv", filename=f"{s.title}.csv")
+
+    df = pd.read_excel(s.file_path)
+    temp_csv = os.path.join(os.path.dirname(s.file_path), f"{s.id}_temp.csv")
+    df.to_csv(temp_csv, index=False)
+    return FileResponse(temp_csv, media_type="text/csv", filename=f"{s.title}.csv")

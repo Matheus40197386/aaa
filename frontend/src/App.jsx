@@ -18,6 +18,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null);
   const [table, setTable] = useState({ columns: [], rows: [] });
   const [search, setSearch] = useState("");
+  const [searchCol, setSearchCol] = useState("");
   const [offset, setOffset] = useState(0);
   const limit = 100;
 
@@ -96,7 +97,7 @@ export default function App() {
     const nextOffset = reset ? 0 : offset;
     setSelectedId(id);
     const res = await axios.get(
-      `${API_URL}/spreadsheets/${id}/data?limit=${limit}&offset=${nextOffset}&search=${encodeURIComponent(search)}`,
+      `${API_URL}/spreadsheets/${id}/data?limit=${limit}&offset=${nextOffset}&search=${encodeURIComponent(search)}&col=${encodeURIComponent(searchCol)}`,
       authHeaders(token)
     );
     setTable(res.data);
@@ -107,6 +108,26 @@ export default function App() {
     const next = offset + limit;
     setOffset(next);
     if (selectedId) loadData(selectedId);
+  }
+
+  async function downloadSheet(id, format) {
+    try {
+      const res = await axios.get(`${API_URL}/spreadsheets/${id}/download?format=${format}`, {
+        ...authHeaders(token),
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data]);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = format === "csv" ? "planilha.csv" : "planilha.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setMessage("Erro ao baixar planilha.");
+    }
   }
 
   async function loadAdminData() {
@@ -226,13 +247,19 @@ export default function App() {
 
       <section style={{ border: "1px solid #ddd", padding: 16 }}>
         <h2>Planilhas</h2>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <button onClick={loadSpreadsheets}>Carregar Planilhas</button>
           <input
             placeholder="Buscar na tabela..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ flex: 1 }}
+            style={{ flex: 1, minWidth: 200 }}
+          />
+          <input
+            placeholder="Coluna (opcional)"
+            value={searchCol}
+            onChange={(e) => setSearchCol(e.target.value)}
+            style={{ width: 180 }}
           />
           <button onClick={() => selectedId && loadData(selectedId, true)}>Buscar</button>
         </div>
@@ -240,6 +267,12 @@ export default function App() {
           {spreadsheets.map((it) => (
             <li key={it.id}>
               <button onClick={() => loadData(it.id, true)}>{it.title}</button>
+              <button style={{ marginLeft: 8 }} onClick={() => downloadSheet(it.id, "excel")}>
+                Baixar Excel
+              </button>
+              <button style={{ marginLeft: 4 }} onClick={() => downloadSheet(it.id, "csv")}>
+                Baixar CSV
+              </button>
             </li>
           ))}
         </ul>
