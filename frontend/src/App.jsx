@@ -329,8 +329,7 @@ export default function App() {
           <section className="login-card">
             <div className="login-brand">
               <img src={brandLogo} alt="Brand" />
-              <h1>Portal Clientes</h1>
-              <p>Portal Clientes Jacuzzi</p>
+              <h1>Portal Clientes Jacuzzi</h1>
             </div>
 
             <div className="login-side">
