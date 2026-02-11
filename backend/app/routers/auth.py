@@ -47,9 +47,6 @@ def first_access_request(payload: schemas.FirstAccessRequest, db: Session = Depe
     )
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.first_access_completed:
-        raise HTTPException(status_code=400, detail="First access already completed")
-
     code = _generate_code()
     user.first_access_code_hash = _hash_code(code)
     user.first_access_code_expires = datetime.utcnow() + timedelta(minutes=15)
@@ -72,8 +69,6 @@ def first_access_confirm(payload: schemas.FirstAccessConfirm, db: Session = Depe
     )
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.first_access_completed:
-        raise HTTPException(status_code=400, detail="First access already completed")
     if not user.first_access_code_hash or not user.first_access_code_expires:
         raise HTTPException(status_code=400, detail="First access code not requested")
     if user.first_access_code_expires < datetime.utcnow():
