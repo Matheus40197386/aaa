@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import "./App.css";
+import brandLogo from "../brand.png";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -13,10 +15,22 @@ export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token"));
   const [me, setMe] = useState(null);
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState("error");
+
   const [showFirstAccess, setShowFirstAccess] = useState(false);
   const [showReset, setShowReset] = useState(false);
-  const [firstAccessForm, setFirstAccessForm] = useState({ cnpj: "", email: "", code: "", new_password: "" });
-  const [resetForm, setResetForm] = useState({ cnpj: "", email: "", code: "", new_password: "" });
+  const [firstAccessForm, setFirstAccessForm] = useState({
+    cnpj: "",
+    email: "",
+    code: "",
+    new_password: "",
+  });
+  const [resetForm, setResetForm] = useState({
+    cnpj: "",
+    email: "",
+    code: "",
+    new_password: "",
+  });
 
   const [spreadsheets, setSpreadsheets] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -63,12 +77,22 @@ export default function App() {
     }
   }, [editUserId, users]);
 
+  function setError(msg) {
+    setMessageTone("error");
+    setMessage(msg);
+  }
+
+  function setSuccess(msg) {
+    setMessageTone("ok");
+    setMessage(msg);
+  }
+
   async function loadMe() {
     try {
       const res = await axios.get(`${API_URL}/auth/me`, authHeaders(token));
       setMe(res.data);
     } catch (err) {
-      setMessage("Sess?o expirada. Fa?a login novamente.");
+      setError("Sessao expirada. Faca login novamente.");
       setToken(null);
       localStorage.removeItem("token");
     }
@@ -85,13 +109,13 @@ export default function App() {
       const detail = err?.response?.data?.detail;
       const status = err?.response?.status;
       if (detail === "First access required" || status === 403) {
-        setMessage("Primeiro acesso necess?rio. Use o fluxo de primeiro acesso.");
+        setError("Primeiro acesso necessario. Informe email e codigo.");
         setShowFirstAccess(true);
         setShowReset(false);
-        setFirstAccessForm({ ...firstAccessForm, cnpj, email: "" });
+        setFirstAccessForm((old) => ({ ...old, cnpj, email: "" }));
         return;
       }
-      setMessage("Login inv?lido.");
+      setError("Login invalido.");
     }
   }
 
@@ -102,8 +126,12 @@ export default function App() {
   }
 
   async function loadSpreadsheets() {
-    const res = await axios.get(`${API_URL}/spreadsheets`, authHeaders(token));
-    setSpreadsheets(res.data);
+    try {
+      const res = await axios.get(`${API_URL}/spreadsheets`, authHeaders(token));
+      setSpreadsheets(res.data);
+    } catch {
+      setError("Erro ao carregar planilhas.");
+    }
   }
 
   async function loadData(id, reset = false) {
@@ -122,8 +150,8 @@ export default function App() {
       });
       setTable(res.data);
       if (reset) setOffset(0);
-    } catch (err) {
-      setMessage("Erro ao carregar dados da planilha.");
+    } catch {
+      setError("Erro ao carregar dados da planilha.");
     }
   }
 
@@ -148,20 +176,24 @@ export default function App() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (err) {
-      setMessage("Erro ao baixar planilha.");
+    } catch {
+      setError("Erro ao baixar planilha.");
     }
   }
 
   async function loadAdminData() {
-    const [levelsRes, usersRes, sheetsRes] = await Promise.all([
-      axios.get(`${API_URL}/admin/access-levels`, authHeaders(token)),
-      axios.get(`${API_URL}/admin/users`, authHeaders(token)),
-      axios.get(`${API_URL}/admin/spreadsheets`, authHeaders(token)),
-    ]);
-    setAccessLevels(levelsRes.data);
-    setUsers(usersRes.data);
-    setAdminSheets(sheetsRes.data);
+    try {
+      const [levelsRes, usersRes, sheetsRes] = await Promise.all([
+        axios.get(`${API_URL}/admin/access-levels`, authHeaders(token)),
+        axios.get(`${API_URL}/admin/users`, authHeaders(token)),
+        axios.get(`${API_URL}/admin/spreadsheets`, authHeaders(token)),
+      ]);
+      setAccessLevels(levelsRes.data);
+      setUsers(usersRes.data);
+      setAdminSheets(sheetsRes.data);
+    } catch {
+      setError("Erro ao carregar dados de administracao.");
+    }
   }
 
   async function handleCreateUser(e) {
@@ -171,9 +203,9 @@ export default function App() {
       await axios.post(`${API_URL}/admin/users`, newUser, authHeaders(token));
       setNewUser({ cnpj: "", name: "", email: "", password: "", is_admin: false, access_level_ids: [] });
       await loadAdminData();
-      setMessage("Usu?rio criado.");
-    } catch (err) {
-      setMessage("Erro ao criar usu?rio.");
+      setSuccess("Usuario criado.");
+    } catch {
+      setError("Erro ao criar usuario.");
     }
   }
 
@@ -188,27 +220,27 @@ export default function App() {
         authHeaders(token)
       );
       await loadAdminData();
-      setMessage("Permiss?es atualizadas.");
-    } catch (err) {
-      setMessage("Erro ao atualizar permiss?es.");
+      setSuccess("Permissoes atualizadas.");
+    } catch {
+      setError("Erro ao atualizar permissoes.");
     }
   }
 
   async function handleDeleteUser(id) {
-    if (!window.confirm("Excluir este usu?rio?")) return;
+    if (!window.confirm("Excluir este usuario?")) return;
     try {
       await axios.delete(`${API_URL}/admin/users/${id}`, authHeaders(token));
       await loadAdminData();
-      setMessage("Usu?rio exclu?do.");
-    } catch (err) {
-      setMessage("Erro ao excluir usu?rio.");
+      setSuccess("Usuario excluido.");
+    } catch {
+      setError("Erro ao excluir usuario.");
     }
   }
 
   async function handleUpload(e) {
     e.preventDefault();
     if (!uploadFile) {
-      setMessage("Selecione uma planilha.");
+      setError("Selecione uma planilha.");
       return;
     }
     const form = new FormData();
@@ -223,9 +255,9 @@ export default function App() {
       setUploadFile(null);
       setUploadAccessIds([]);
       await loadAdminData();
-      setMessage("Planilha enviada.");
-    } catch (err) {
-      setMessage("Erro ao enviar planilha.");
+      setSuccess("Planilha enviada.");
+    } catch {
+      setError("Erro ao enviar planilha.");
     }
   }
 
@@ -234,9 +266,57 @@ export default function App() {
     try {
       await axios.delete(`${API_URL}/admin/spreadsheets/${id}`, authHeaders(token));
       await loadAdminData();
-      setMessage("Planilha exclu?da.");
-    } catch (err) {
-      setMessage("Erro ao excluir planilha.");
+      setSuccess("Planilha excluida.");
+    } catch {
+      setError("Erro ao excluir planilha.");
+    }
+  }
+
+  async function requestFirstAccessCode() {
+    setMessage("");
+    try {
+      await axios.post(`${API_URL}/auth/first-access/request`, {
+        cnpj: firstAccessForm.cnpj,
+        email: firstAccessForm.email,
+      });
+      setSuccess("Codigo de primeiro acesso enviado por email.");
+    } catch {
+      setError("Erro ao solicitar primeiro acesso.");
+    }
+  }
+
+  async function confirmFirstAccess() {
+    setMessage("");
+    try {
+      await axios.post(`${API_URL}/auth/first-access/confirm`, firstAccessForm);
+      setSuccess("Senha definida. Voce ja pode fazer login.");
+      setShowFirstAccess(false);
+    } catch {
+      setError("Erro ao confirmar primeiro acesso.");
+    }
+  }
+
+  async function requestResetCode() {
+    setMessage("");
+    try {
+      await axios.post(`${API_URL}/auth/password-reset/request`, {
+        cnpj: resetForm.cnpj,
+        email: resetForm.email,
+      });
+      setSuccess("Codigo de recuperacao enviado por email.");
+    } catch {
+      setError("Erro ao solicitar recuperacao.");
+    }
+  }
+
+  async function confirmReset() {
+    setMessage("");
+    try {
+      await axios.post(`${API_URL}/auth/password-reset/confirm`, resetForm);
+      setSuccess("Senha atualizada. Voce ja pode fazer login.");
+      setShowReset(false);
+    } catch {
+      setError("Erro ao confirmar recuperacao.");
     }
   }
 
@@ -244,333 +324,406 @@ export default function App() {
 
   if (!token) {
     return (
-      <div style={{ padding: 24 }}>
-        <h1>Portal Clientes</h1>
-        <form onSubmit={handleLogin} style={{ display: "grid", gap: 8, maxWidth: 320 }}>
-          <input placeholder="CNPJ" value={cnpj} onChange={(e) => setCnpj(e.target.value)} />
-          <input placeholder="Senha" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          <button type="submit">Entrar</button>
-          {message && <div style={{ color: "crimson" }}>{message}</div>}
-        </form>
+      <div className="page">
+        <div className="login-wrap">
+          <section className="login-card">
+            <div className="login-brand">
+              <img src={brandLogo} alt="Brand" />
+              <h1>Portal Clientes</h1>
+              <p>Acesso seguro a planilhas, relatorios e niveis de permissao.</p>
+            </div>
 
-        <div style={{ marginTop: 12, display: "flex", gap: 12 }}>
-          <button onClick={() => { setShowFirstAccess(!showFirstAccess); setShowReset(false); }}>
-            Primeiro acesso
-          </button>
-          <button onClick={() => { setShowReset(!showReset); setShowFirstAccess(false); }}>
-            Recuperar senha
-          </button>
+            <div className="login-side">
+              <h2 className="panel-title">Entrar</h2>
+              <p className="panel-subtitle">Use CNPJ e senha para acessar.</p>
+              <form onSubmit={handleLogin} className="form-grid">
+                <input className="field" placeholder="CNPJ" value={cnpj} onChange={(e) => setCnpj(e.target.value)} />
+                <input
+                  className="field"
+                  placeholder="Senha"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button className="btn" type="submit">
+                  Entrar
+                </button>
+              </form>
+
+              {message && <div className={`message ${messageTone}`}>{message}</div>}
+
+              <div className="switch-row">
+                <button
+                  className="btn alt"
+                  type="button"
+                  onClick={() => {
+                    setShowFirstAccess(!showFirstAccess);
+                    setShowReset(false);
+                  }}
+                >
+                  Primeiro acesso
+                </button>
+                <button
+                  className="btn ghost"
+                  type="button"
+                  onClick={() => {
+                    setShowReset(!showReset);
+                    setShowFirstAccess(false);
+                  }}
+                >
+                  Recuperar senha
+                </button>
+              </div>
+
+              {showFirstAccess && (
+                <div className="auth-flow">
+                  <strong>Primeiro acesso</strong>
+                  <input
+                    className="field"
+                    placeholder="CNPJ"
+                    value={firstAccessForm.cnpj}
+                    onChange={(e) => setFirstAccessForm({ ...firstAccessForm, cnpj: e.target.value })}
+                  />
+                  <input
+                    className="field"
+                    placeholder="Email"
+                    value={firstAccessForm.email}
+                    onChange={(e) => setFirstAccessForm({ ...firstAccessForm, email: e.target.value })}
+                  />
+                  <button className="btn alt" type="button" onClick={requestFirstAccessCode}>
+                    Enviar codigo
+                  </button>
+                  <input
+                    className="field"
+                    placeholder="Codigo recebido"
+                    value={firstAccessForm.code}
+                    onChange={(e) => setFirstAccessForm({ ...firstAccessForm, code: e.target.value })}
+                  />
+                  <input
+                    className="field"
+                    placeholder="Nova senha"
+                    type="password"
+                    value={firstAccessForm.new_password}
+                    onChange={(e) => setFirstAccessForm({ ...firstAccessForm, new_password: e.target.value })}
+                  />
+                  <button className="btn" type="button" onClick={confirmFirstAccess}>
+                    Confirmar primeiro acesso
+                  </button>
+                </div>
+              )}
+
+              {showReset && (
+                <div className="auth-flow">
+                  <strong>Recuperar senha</strong>
+                  <input
+                    className="field"
+                    placeholder="CNPJ"
+                    value={resetForm.cnpj}
+                    onChange={(e) => setResetForm({ ...resetForm, cnpj: e.target.value })}
+                  />
+                  <input
+                    className="field"
+                    placeholder="Email"
+                    value={resetForm.email}
+                    onChange={(e) => setResetForm({ ...resetForm, email: e.target.value })}
+                  />
+                  <button className="btn alt" type="button" onClick={requestResetCode}>
+                    Enviar codigo
+                  </button>
+                  <input
+                    className="field"
+                    placeholder="Codigo recebido"
+                    value={resetForm.code}
+                    onChange={(e) => setResetForm({ ...resetForm, code: e.target.value })}
+                  />
+                  <input
+                    className="field"
+                    placeholder="Nova senha"
+                    type="password"
+                    value={resetForm.new_password}
+                    onChange={(e) => setResetForm({ ...resetForm, new_password: e.target.value })}
+                  />
+                  <button className="btn" type="button" onClick={confirmReset}>
+                    Confirmar recuperacao
+                  </button>
+                </div>
+              )}
+            </div>
+          </section>
         </div>
-
-        {showFirstAccess && (
-          <div style={{ marginTop: 16, maxWidth: 360, display: "grid", gap: 8 }}>
-            <strong>Primeiro acesso</strong>
-            <input
-              placeholder="CNPJ"
-              value={firstAccessForm.cnpj}
-              onChange={(e) => setFirstAccessForm({ ...firstAccessForm, cnpj: e.target.value })}
-            />
-            <input
-              placeholder="Email"
-              value={firstAccessForm.email}
-              onChange={(e) => setFirstAccessForm({ ...firstAccessForm, email: e.target.value })}
-            />
-            <button
-              onClick={async () => {
-                setMessage("");
-                try {
-                  await axios.post(`${API_URL}/auth/first-access/request`, {
-                    cnpj: firstAccessForm.cnpj,
-                    email: firstAccessForm.email,
-                  });
-                  setMessage("C?digo de primeiro acesso enviado por email.");
-                } catch (err) {
-                  setMessage("Erro ao solicitar primeiro acesso.");
-                }
-              }}
-            >
-              Enviar c?digo
-            </button>
-            <input
-              placeholder="C?digo recebido"
-              value={firstAccessForm.code}
-              onChange={(e) => setFirstAccessForm({ ...firstAccessForm, code: e.target.value })}
-            />
-            <input
-              placeholder="Nova senha"
-              type="password"
-              value={firstAccessForm.new_password}
-              onChange={(e) => setFirstAccessForm({ ...firstAccessForm, new_password: e.target.value })}
-            />
-            <button
-              onClick={async () => {
-                setMessage("");
-                try {
-                  await axios.post(`${API_URL}/auth/first-access/confirm`, firstAccessForm);
-                  setMessage("Senha definida. Voc? j? pode fazer login.");
-                  setShowFirstAccess(false);
-                } catch (err) {
-                  setMessage("Erro ao confirmar primeiro acesso.");
-                }
-              }}
-            >
-              Confirmar primeiro acesso
-            </button>
-          </div>
-        )}
-
-        {showReset && (
-          <div style={{ marginTop: 16, maxWidth: 360, display: "grid", gap: 8 }}>
-            <strong>Recuperar senha</strong>
-            <input
-              placeholder="CNPJ"
-              value={resetForm.cnpj}
-              onChange={(e) => setResetForm({ ...resetForm, cnpj: e.target.value })}
-            />
-            <input
-              placeholder="Email"
-              value={resetForm.email}
-              onChange={(e) => setResetForm({ ...resetForm, email: e.target.value })}
-            />
-            <button
-              onClick={async () => {
-                setMessage("");
-                try {
-                  await axios.post(`${API_URL}/auth/password-reset/request`, {
-                    cnpj: resetForm.cnpj,
-                    email: resetForm.email,
-                  });
-                  setMessage("C?digo de recupera??o enviado por email.");
-                } catch (err) {
-                  setMessage("Erro ao solicitar recupera??o.");
-                }
-              }}
-            >
-              Enviar c?digo
-            </button>
-            <input
-              placeholder="C?digo recebido"
-              value={resetForm.code}
-              onChange={(e) => setResetForm({ ...resetForm, code: e.target.value })}
-            />
-            <input
-              placeholder="Nova senha"
-              type="password"
-              value={resetForm.new_password}
-              onChange={(e) => setResetForm({ ...resetForm, new_password: e.target.value })}
-            />
-            <button
-              onClick={async () => {
-                setMessage("");
-                try {
-                  await axios.post(`${API_URL}/auth/password-reset/confirm`, resetForm);
-                  setMessage("Senha atualizada. Voc? j? pode fazer login.");
-                  setShowReset(false);
-                } catch (err) {
-                  setMessage("Erro ao confirmar recupera??o.");
-                }
-              }}
-            >
-              Confirmar recupera??o
-            </button>
-          </div>
-        )}
       </div>
     );
   }
 
   return (
-    <div style={{ padding: 24, display: "grid", gap: 24 }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h1 style={{ margin: 0 }}>Portal Clientes</h1>
-          {me && <div>Bem-vindo, {me.name}</div>}
-        </div>
-        <button onClick={handleLogout}>Sair</button>
-      </header>
-
-      {message && <div style={{ color: "#0a6" }}>{message}</div>}
-
-      <section style={{ border: "1px solid #ddd", padding: 16 }}>
-        <h2>Planilhas</h2>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <button onClick={loadSpreadsheets}>Carregar Planilhas</button>
-          <input
-            placeholder="Buscar na tabela..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ flex: 1, minWidth: 200 }}
-          />
-          <input
-            placeholder="Coluna (opcional)"
-            value={searchCol}
-            onChange={(e) => setSearchCol(e.target.value)}
-            style={{ width: 180 }}
-          />
-          <button onClick={() => selectedId && loadData(selectedId, true)}>Buscar</button>
-        </div>
-        <ul>
-          {spreadsheets.map((it) => (
-            <li key={it.id}>
-              <button onClick={() => loadData(it.id, true)}>{it.title}</button>
-              <button style={{ marginLeft: 8 }} onClick={() => downloadSheet(it.id, "excel")}>
-                Baixar Excel
-              </button>
-              <button style={{ marginLeft: 4 }} onClick={() => downloadSheet(it.id, "csv")}>
-                Baixar CSV
-              </button>
-            </li>
-          ))}
-        </ul>
-
-        {selectedId && (
+    <div className="page">
+      <div className="app-shell">
+        <header className="topbar">
           <div>
-            <h3>Dados</h3>
-            <table border="1" cellPadding="6">
-              <thead>
-                <tr>
-                  {table.columns.map((c) => (
-                    <th key={c}>{c}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {table.rows.map((row, idx) => (
-                  <tr key={idx}>
-                    {table.columns.map((c) => (
-                      <td key={c}>{row[c]}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <button onClick={nextPage} style={{ marginTop: 8 }}>
-              Pr?xima p?gina
+            <h1 className="title">Portal Clientes</h1>
+            <p className="subtitle">{me ? `Bem-vindo, ${me.name}` : "Painel de acesso"}</p>
+          </div>
+          <div className="row">
+            <button className="btn alt" onClick={loadSpreadsheets}>
+              Carregar planilhas
+            </button>
+            {me?.is_admin && (
+              <button className="btn ghost" onClick={loadAdminData}>
+                Carregar dados admin
+              </button>
+            )}
+            <button className="btn" onClick={handleLogout}>
+              Sair
             </button>
           </div>
-        )}
-      </section>
+        </header>
 
-      {me?.is_admin && (
-        <section style={{ border: "1px solid #ddd", padding: 16 }}>
-          <h2>Administra??o</h2>
-          <button onClick={loadAdminData}>Carregar Dados Admin</button>
+        {message && <div className={`message ${messageTone}`}>{message}</div>}
 
-          <div style={{ display: "grid", gap: 16, marginTop: 16 }}>
-            <form onSubmit={handleCreateUser} style={{ border: "1px solid #eee", padding: 12 }}>
-              <h3>Criar Usu?rio</h3>
-              <input placeholder="CNPJ" value={newUser.cnpj} onChange={(e) => setNewUser({ ...newUser, cnpj: e.target.value })} />
-              <input placeholder="Nome" value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} />
-              <input placeholder="Email" value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} />
-              <input placeholder="Senha" type="password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} />
-              <label>
-                <input type="checkbox" checked={newUser.is_admin} onChange={(e) => setNewUser({ ...newUser, is_admin: e.target.checked })} />
-                Admin
-              </label>
-              <div>
-                <strong>Acessos</strong>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 4 }}>
-                  {accessLevels.map((al) => (
-                    <label key={al.id}>
-                      <input
-                        type="checkbox"
-                        checked={newUser.access_level_ids.includes(al.id)}
-                        onChange={(e) => {
-                          const next = e.target.checked
-                            ? [...newUser.access_level_ids, al.id]
-                            : newUser.access_level_ids.filter((id) => id !== al.id);
-                          setNewUser({ ...newUser, access_level_ids: next });
-                        }}
-                      />
-                      {al.name}
-                    </label>
-                  ))}
+        <div className="grid-main">
+          <section className="card">
+            <h2>Planilhas</h2>
+            <div className="row">
+              <input
+                className="field"
+                placeholder="Buscar na tabela"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <input
+                className="field"
+                placeholder="Coluna opcional"
+                value={searchCol}
+                onChange={(e) => setSearchCol(e.target.value)}
+              />
+              <button className="btn alt" onClick={() => selectedId && loadData(selectedId, true)}>
+                Buscar
+              </button>
+            </div>
+
+            <ul className="list">
+              {spreadsheets.map((it) => (
+                <li className="item" key={it.id}>
+                  <strong>{it.title}</strong>
+                  <div className="row">
+                    <button className="btn ghost" onClick={() => loadData(it.id, true)}>
+                      Abrir
+                    </button>
+                    <button className="btn alt" onClick={() => downloadSheet(it.id, "excel")}>
+                      Excel
+                    </button>
+                    <button className="btn alt" onClick={() => downloadSheet(it.id, "csv")}>
+                      CSV
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            {selectedId && (
+              <>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        {table.columns.map((c) => (
+                          <th key={c}>{c}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {table.rows.map((row, idx) => (
+                        <tr key={idx}>
+                          {table.columns.map((c) => (
+                            <td key={c}>{row[c]}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
-              <button type="submit">Criar</button>
-            </form>
+                <div style={{ marginTop: 10 }}>
+                  <button className="btn" onClick={nextPage}>
+                    Proxima pagina
+                  </button>
+                </div>
+              </>
+            )}
+          </section>
 
-            <form onSubmit={handleUpdateUserAccess} style={{ border: "1px solid #eee", padding: 12 }}>
-              <h3>Atualizar Permiss?es</h3>
-              <select value={editUserId} onChange={(e) => setEditUserId(e.target.value)}>
-                <option value="">Selecione um usu?rio</option>
-                {userOptions.map((u) => (
-                  <option key={u.id} value={u.id}>{u.label}</option>
-                ))}
-              </select>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 4, marginTop: 8 }}>
-                {accessLevels.map((al) => (
-                  <label key={al.id}>
+          {me?.is_admin && (
+            <section className="card">
+              <h2>Administracao</h2>
+              <p className="muted">Gestao de usuarios, acessos e planilhas.</p>
+
+              <div className="card" style={{ marginTop: 12 }}>
+                <h3>Criar usuario</h3>
+                <form onSubmit={handleCreateUser} className="form-grid">
+                  <input
+                    className="field"
+                    placeholder="CNPJ"
+                    value={newUser.cnpj}
+                    onChange={(e) => setNewUser({ ...newUser, cnpj: e.target.value })}
+                  />
+                  <input
+                    className="field"
+                    placeholder="Nome"
+                    value={newUser.name}
+                    onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                  />
+                  <input
+                    className="field"
+                    placeholder="Email"
+                    value={newUser.email}
+                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  />
+                  <input
+                    className="field"
+                    placeholder="Senha inicial"
+                    type="password"
+                    value={newUser.password}
+                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  />
+                  <label>
                     <input
                       type="checkbox"
-                      checked={editAccessIds.includes(al.id)}
-                      onChange={(e) => {
-                        const next = e.target.checked
-                          ? [...editAccessIds, al.id]
-                          : editAccessIds.filter((id) => id !== al.id);
-                        setEditAccessIds(next);
-                      }}
-                    />
-                    {al.name}
+                      checked={newUser.is_admin}
+                      onChange={(e) => setNewUser({ ...newUser, is_admin: e.target.checked })}
+                    />{" "}
+                    Admin
                   </label>
-                ))}
+                  <div>
+                    <strong>Acessos</strong>
+                    <div className="checkbox-grid">
+                      {accessLevels.map((al) => (
+                        <label key={al.id}>
+                          <input
+                            type="checkbox"
+                            checked={newUser.access_level_ids.includes(al.id)}
+                            onChange={(e) => {
+                              const next = e.target.checked
+                                ? [...newUser.access_level_ids, al.id]
+                                : newUser.access_level_ids.filter((id) => id !== al.id);
+                              setNewUser({ ...newUser, access_level_ids: next });
+                            }}
+                          />{" "}
+                          {al.name}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <button className="btn" type="submit">
+                    Criar usuario
+                  </button>
+                </form>
               </div>
-              <button type="submit">Salvar Permiss?es</button>
-            </form>
 
-            <form onSubmit={handleUpload} style={{ border: "1px solid #eee", padding: 12 }}>
-              <h3>Enviar Planilha</h3>
-              <input placeholder="T?tulo" value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} />
-              <input type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
-              <div>
-                <strong>Acessos</strong>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 4 }}>
-                  {accessLevels.map((al) => (
-                    <label key={al.id}>
-                      <input
-                        type="checkbox"
-                        checked={uploadAccessIds.includes(al.id)}
-                        onChange={(e) => {
-                          const next = e.target.checked
-                            ? [...uploadAccessIds, al.id]
-                            : uploadAccessIds.filter((id) => id !== al.id);
-                          setUploadAccessIds(next);
-                        }}
-                      />
-                      {al.name}
-                    </label>
+              <div className="card" style={{ marginTop: 12 }}>
+                <h3>Atualizar permissoes</h3>
+                <form onSubmit={handleUpdateUserAccess} className="form-grid">
+                  <select className="field" value={editUserId} onChange={(e) => setEditUserId(e.target.value)}>
+                    <option value="">Selecione um usuario</option>
+                    {userOptions.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="checkbox-grid">
+                    {accessLevels.map((al) => (
+                      <label key={al.id}>
+                        <input
+                          type="checkbox"
+                          checked={editAccessIds.includes(al.id)}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...editAccessIds, al.id]
+                              : editAccessIds.filter((id) => id !== al.id);
+                            setEditAccessIds(next);
+                          }}
+                        />{" "}
+                        {al.name}
+                      </label>
+                    ))}
+                  </div>
+                  <button className="btn alt" type="submit">
+                    Salvar permissoes
+                  </button>
+                </form>
+              </div>
+
+              <div className="card" style={{ marginTop: 12 }}>
+                <h3>Enviar planilha</h3>
+                <form onSubmit={handleUpload} className="form-grid">
+                  <input
+                    className="field"
+                    placeholder="Titulo"
+                    value={uploadTitle}
+                    onChange={(e) => setUploadTitle(e.target.value)}
+                  />
+                  <input className="field" type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+                  <div>
+                    <strong>Acessos da planilha</strong>
+                    <div className="checkbox-grid">
+                      {accessLevels.map((al) => (
+                        <label key={al.id}>
+                          <input
+                            type="checkbox"
+                            checked={uploadAccessIds.includes(al.id)}
+                            onChange={(e) => {
+                              const next = e.target.checked
+                                ? [...uploadAccessIds, al.id]
+                                : uploadAccessIds.filter((id) => id !== al.id);
+                              setUploadAccessIds(next);
+                            }}
+                          />{" "}
+                          {al.name}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <button className="btn" type="submit">
+                    Enviar planilha
+                  </button>
+                </form>
+              </div>
+
+              <div className="card" style={{ marginTop: 12 }}>
+                <h3>Usuarios</h3>
+                <ul className="list">
+                  {users.map((u) => (
+                    <li className="item" key={u.id}>
+                      <span>
+                        {u.name} ({u.cnpj}) - {u.is_admin ? "Admin" : "Cliente"} -{" "}
+                        {u.access_levels.map((a) => a.name).join(", ")}
+                      </span>
+                      <button className="btn danger" onClick={() => handleDeleteUser(u.id)}>
+                        Excluir
+                      </button>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
-              <button type="submit">Enviar</button>
-            </form>
 
-            <div style={{ border: "1px solid #eee", padding: 12 }}>
-              <h3>Usu?rios</h3>
-              <ul>
-                {users.map((u) => (
-                  <li key={u.id}>
-                    {u.name} ({u.cnpj}) - {u.is_admin ? "Admin" : "Cliente"} - {u.access_levels.map((a) => a.name).join(", ")}
-                    <button style={{ marginLeft: 8 }} onClick={() => handleDeleteUser(u.id)}>Excluir</button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div style={{ border: "1px solid #eee", padding: 12 }}>
-              <h3>Planilhas</h3>
-              <ul>
-                {adminSheets.map((s) => (
-                  <li key={s.id}>
-                    {s.title} - {s.access_levels.map((a) => a.name).join(", ")}
-                    <button style={{ marginLeft: 8 }} onClick={() => handleDeleteSheet(s.id)}>Excluir</button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </section>
-      )}
+              <div className="card" style={{ marginTop: 12 }}>
+                <h3>Planilhas cadastradas</h3>
+                <ul className="list">
+                  {adminSheets.map((s) => (
+                    <li className="item" key={s.id}>
+                      <span>
+                        {s.title} - {s.access_levels.map((a) => a.name).join(", ")}
+                      </span>
+                      <button className="btn danger" onClick={() => handleDeleteSheet(s.id)}>
+                        Excluir
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
