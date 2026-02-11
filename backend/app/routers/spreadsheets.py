@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app import models
 from app.dependencies import get_db, get_current_user
 import pandas as pd
@@ -10,6 +10,11 @@ import re
 import unicodedata
 
 router = APIRouter(prefix="/spreadsheets", tags=["spreadsheets"])
+
+
+def _has_required_access(spreadsheet: models.Spreadsheet, user_access_ids: set[int]) -> bool:
+    required_ids = {level.id for level in spreadsheet.access_levels}
+    return required_ids.issubset(user_access_ids)
 
 
 def _normalize_text(text: str) -> str:
@@ -66,15 +71,13 @@ def list_spreadsheets(db: Session = Depends(get_db), user=Depends(get_current_us
     if user.is_admin:
         items = db.query(models.Spreadsheet).all()
     else:
+        user_access_ids = {level.id for level in user.access_levels}
         items = (
             db.query(models.Spreadsheet)
-            .join(models.spreadsheet_access)
-            .join(models.AccessLevel)
-            .join(models.user_access_levels)
-            .filter(models.user_access_levels.c.user_id == user.id)
-            .distinct()
+            .options(joinedload(models.Spreadsheet.access_levels))
             .all()
         )
+        items = [item for item in items if _has_required_access(item, user_access_ids)]
     return [{"id": s.id, "title": s.title} for s in items]
 
 @router.get("/{spreadsheet_id}/data")
@@ -92,16 +95,8 @@ def get_spreadsheet_data(
         raise HTTPException(status_code=404, detail="Not found")
 
     if not user.is_admin:
-        allowed = (
-            db.query(models.Spreadsheet)
-            .join(models.spreadsheet_access)
-            .join(models.AccessLevel)
-            .join(models.user_access_levels)
-            .filter(models.Spreadsheet.id == spreadsheet_id)
-            .filter(models.user_access_levels.c.user_id == user.id)
-            .first()
-        )
-        if not allowed:
+        user_access_ids = {level.id for level in user.access_levels}
+        if not _has_required_access(s, user_access_ids):
             raise HTTPException(status_code=403, detail="Forbidden")
 
     if not os.path.exists(s.file_path):
@@ -143,16 +138,8 @@ def download_spreadsheet(
         raise HTTPException(status_code=404, detail="Not found")
 
     if not user.is_admin:
-        allowed = (
-            db.query(models.Spreadsheet)
-            .join(models.spreadsheet_access)
-            .join(models.AccessLevel)
-            .join(models.user_access_levels)
-            .filter(models.Spreadsheet.id == spreadsheet_id)
-            .filter(models.user_access_levels.c.user_id == user.id)
-            .first()
-        )
-        if not allowed:
+        user_access_ids = {level.id for level in user.access_levels}
+        if not _has_required_access(s, user_access_ids):
             raise HTTPException(status_code=403, detail="Forbidden")
 
     if not os.path.exists(s.file_path):

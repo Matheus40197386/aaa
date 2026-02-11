@@ -3,12 +3,34 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.dependencies import get_db, get_current_admin
 from app.auth import hash_password
+from app.constants import UF_CODE_SET
 import secrets
 from app.core.config import settings
 import os
 import uuid
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+def _normalize_uf(uf: str | None) -> str | None:
+    if uf is None:
+        return None
+    normalized = uf.strip().upper()
+    return normalized or None
+
+
+def _sync_user_uf_access_levels(db: Session, user: models.User, selected_access_level_ids: list[int]):
+    if not user.uf:
+        return
+    selected_ids = set(selected_access_level_ids or [])
+    levels = db.query(models.AccessLevel).all()
+    uf_level_ids = {level.id for level in levels if level.name in UF_CODE_SET}
+    user_uf_level = next((level for level in levels if level.name == user.uf), None)
+    selected_ids -= uf_level_ids
+    if user_uf_level:
+        selected_ids.add(user_uf_level.id)
+    user.access_levels = [level for level in levels if level.id in selected_ids]
+
 
 @router.get("/access-levels", response_model=list[schemas.AccessLevelItem])
 def list_access_levels(db: Session = Depends(get_db), admin=Depends(get_current_admin)):
@@ -24,6 +46,7 @@ def list_users(db: Session = Depends(get_db), admin=Depends(get_current_admin)):
             "cnpj": u.cnpj,
             "name": u.name,
             "email": u.email,
+            "uf": u.uf,
             "is_admin": u.is_admin,
             "access_levels": [{"id": al.id, "name": al.name} for al in u.access_levels],
         }
@@ -34,18 +57,21 @@ def list_users(db: Session = Depends(get_db), admin=Depends(get_current_admin)):
 def create_user(payload: schemas.UserCreate, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
     if db.query(models.User).filter(models.User.cnpj == payload.cnpj).first():
         raise HTTPException(status_code=400, detail="CNPJ already exists")
+    uf = _normalize_uf(payload.uf)
+    if not uf or uf not in UF_CODE_SET:
+        raise HTTPException(status_code=400, detail="UF invalid")
 
     raw_password = payload.password or secrets.token_urlsafe(16)
     user = models.User(
         cnpj=payload.cnpj,
         name=payload.name,
         email=payload.email,
+        uf=uf,
         password_hash=hash_password(raw_password),
         is_admin=payload.is_admin,
         first_access_completed=False,
     )
-    access_levels = db.query(models.AccessLevel).filter(models.AccessLevel.id.in_(payload.access_level_ids)).all()
-    user.access_levels = access_levels
+    _sync_user_uf_access_levels(db, user, payload.access_level_ids)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -61,8 +87,7 @@ def update_user_access_levels(
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    access_levels = db.query(models.AccessLevel).filter(models.AccessLevel.id.in_(payload.access_level_ids)).all()
-    user.access_levels = access_levels
+    _sync_user_uf_access_levels(db, user, payload.access_level_ids)
     db.commit()
     return {"status": "ok"}
 

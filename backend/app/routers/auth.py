@@ -34,6 +34,7 @@ def me(user=Depends(get_current_user)):
         "cnpj": user.cnpj,
         "name": user.name,
         "email": user.email,
+        "uf": user.uf,
         "is_admin": user.is_admin,
         "access_levels": [al.name for al in user.access_levels],
     }

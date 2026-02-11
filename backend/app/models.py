@@ -22,6 +22,7 @@ class User(Base):
     cnpj = Column(String(18), unique=True, nullable=False)
     name = Column(String(120), nullable=False)
     email = Column(String(120), nullable=True)
+    uf = Column(String(2), nullable=True)
     password_hash = Column(String(255), nullable=False)
     status = Column(Enum("active", "inactive"), default="active")
     is_admin = Column(Boolean, default=False)

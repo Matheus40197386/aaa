@@ -17,6 +17,7 @@ class UserCreate(BaseModel):
     cnpj: str
     name: str
     email: Optional[str] = None
+    uf: str
     password: Optional[str] = None
     access_level_ids: List[int]
     is_admin: bool = False
@@ -29,6 +30,7 @@ class UserItem(BaseModel):
     cnpj: str
     name: str
     email: Optional[str] = None
+    uf: Optional[str] = None
     is_admin: bool
     access_levels: List[AccessLevelItem]
 

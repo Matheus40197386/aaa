@@ -9,6 +9,35 @@ import grow2getherLogo from "../Grow2Gether.png";
 import restoreYouLogo from "../RestoreYou.jpg";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const UF_CODES = [
+  "AC",
+  "AL",
+  "AM",
+  "AP",
+  "BA",
+  "CE",
+  "DF",
+  "ES",
+  "GO",
+  "MA",
+  "MG",
+  "MS",
+  "MT",
+  "PA",
+  "PB",
+  "PE",
+  "PI",
+  "PR",
+  "RJ",
+  "RN",
+  "RO",
+  "RR",
+  "RS",
+  "SC",
+  "SE",
+  "SP",
+  "TO",
+];
 
 function authHeaders(token) {
   return { headers: { Authorization: `Bearer ${token}` } };
@@ -63,6 +92,7 @@ export default function App() {
     cnpj: "",
     name: "",
     email: "",
+    uf: "",
     password: "",
     is_admin: false,
     access_level_ids: [],
@@ -214,9 +244,13 @@ export default function App() {
   async function handleCreateUser(e) {
     e.preventDefault();
     setMessage("");
+    if (!newUser.uf) {
+      setError("Selecione a UF do usuario.");
+      return;
+    }
     try {
       await axios.post(`${API_URL}/admin/users`, newUser, authHeaders(token));
-      setNewUser({ cnpj: "", name: "", email: "", password: "", is_admin: false, access_level_ids: [] });
+      setNewUser({ cnpj: "", name: "", email: "", uf: "", password: "", is_admin: false, access_level_ids: [] });
       await loadAdminData();
       setSuccess("Usuario criado.");
     } catch {
@@ -619,6 +653,18 @@ export default function App() {
                     value={newUser.email}
                     onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
                   />
+                  <select
+                    className="field"
+                    value={newUser.uf}
+                    onChange={(e) => setNewUser({ ...newUser, uf: e.target.value })}
+                  >
+                    <option value="">UF</option>
+                    {UF_CODES.map((uf) => (
+                      <option key={uf} value={uf}>
+                        {uf}
+                      </option>
+                    ))}
+                  </select>
                   <input
                     className="field"
                     placeholder="Senha inicial"
@@ -736,7 +782,7 @@ export default function App() {
                   {users.map((u) => (
                     <li className="item" key={u.id}>
                       <span>
-                        {u.name} ({u.cnpj}) - {u.is_admin ? "Admin" : "Cliente"} -{" "}
+                        {u.name} ({u.cnpj}) - UF: {u.uf || "-"} - {u.is_admin ? "Admin" : "Cliente"} -{" "}
                         {u.access_levels.map((a) => a.name).join(", ")}
                       </span>
                       <button className="btn danger" onClick={() => handleDeleteUser(u.id)}>
