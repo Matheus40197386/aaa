@@ -55,12 +55,13 @@ select {
 }
 
 .login-brand {
-  background: linear-gradient(150deg, #0d3a5b, #14507c 42%, #1f6ea8);
-  color: #fff;
+  background: #ffffff;
+  color: var(--text);
   padding: 38px;
   display: grid;
   align-content: center;
   gap: 18px;
+  border-right: 1px solid var(--line);
 }
 
 .login-brand img {
@@ -79,7 +80,7 @@ select {
 
 .login-brand p {
   margin: 0;
-  color: #f0f6ff;
+  color: var(--text-soft);
 }
 
 .login-side {

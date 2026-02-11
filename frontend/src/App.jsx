@@ -330,7 +330,7 @@ export default function App() {
             <div className="login-brand">
               <img src={brandLogo} alt="Brand" />
               <h1>Portal Clientes</h1>
-              <p>Acesso seguro a planilhas, relatorios e niveis de permissao.</p>
+              <p>Portal Clientes Jacuzzi</p>
             </div>
 
             <div className="login-side">
